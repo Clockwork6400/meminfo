@@ -411,6 +411,10 @@ NR > 7 {
 END {
     print "Total RSS Sum:", rss_sum_kb / 1024, "MiB"
 }'
+chrom=$(ps -auxww | grep "chrom" | grep -v 'grep' | sort -nrk 4 | awk '{print $4 "%", $11}' | wc -l)
+echo -e "\nпроцессов chrome: ${chrom}"
+firefox=$(ps -auxww | grep "firefox" | grep -v 'grep' | sort -nrk 4 | awk '{print $4 "%", $11}' | wc -l)
+echo -e "процессов firefox: ${firefox}\n"
 else
   top -b  | awk '
 function parse_memory(mem) {
