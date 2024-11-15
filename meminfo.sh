@@ -587,21 +587,50 @@ parse_memory() {
 }
 
 # Получение данных о видеопамяти
-nvidia_smi_output=$(nvidia-smi -q)
+## Проверка существования команды nvidia-smi
+#if ! command -v nvidia-smi > /dev/null 2>&1; then
+#    echo "Команда nvidia-smi не найдена. Продолжаем выполнение."
+#    # Если команда не найдена, ничего не делаем и продолжаем скрипт
+#else
+#    nvidia_smi_output=$(nvidia-smi -q)
+#
+#    # Извлечение информации из вывода nvidia-smi
+#    total_gpu_memory=$(echo "$nvidia_smi_output" | grep -A3 "FB Memory Usage" | grep "Total" | awk '{print $3}')
+#    used_gpu_memory=$(echo "$nvidia_smi_output" | grep -A3 "FB Memory Usage" | grep "Used" | awk '{print $3}')
+#
+#    # Парсинг значений видеопамяти
+#    total_gpu_memory_kb=$(echo "$total_gpu_memory" | sed 's/[^0-9]*//g')000
+#    used_gpu_memory_kb=$(echo "$used_gpu_memory" | sed 's/[^0-9]*//g')000
+#
+#    # Вычисление процентного использования
+#    gpu_memory_percentage=$(awk "BEGIN {printf \"%.2f\", (${used_gpu_memory_kb}/${total_gpu_memory_kb})*100}")
+#
+#    # Вывод информации о видеопамяти
+#    echo "Nvidia Memory Usage: $(($used_gpu_memory_kb / 1024)) MiB / $(($total_gpu_memory_kb / 1024)) MiB (${gpu_memory_percentage}%)"
+#fi
 
-# Извлечение информации из вывода nvidia-smi
-total_gpu_memory=$(echo "$nvidia_smi_output" | grep -A3 "FB Memory Usage" | grep "Total" | awk '{print $3}')
-used_gpu_memory=$(echo "$nvidia_smi_output" | grep -A3 "FB Memory Usage" | grep "Used" | awk '{print $3}')
+# Проверка существования команды nvidia-smi
+if command -v nvidia-smi > /dev/null 2>&1; then
+    nvidia_smi_output=$(nvidia-smi -q)
 
-# Парсинг значений видеопамяти
-total_gpu_memory_kb=$(parse_memory "$total_gpu_memory")
-used_gpu_memory_kb=$(parse_memory "$used_gpu_memory")
+    # Извлечение информации из вывода nvidia-smi
+    total_gpu_memory=$(echo "$nvidia_smi_output" | grep -A3 "FB Memory Usage" | grep "Total" | awk '{print $3}')
+    used_gpu_memory=$(echo "$nvidia_smi_output" | grep -A3 "FB Memory Usage" | grep "Used" | awk '{print $3}')
 
-# Вычисление процентного использования
-gpu_memory_percentage=$(awk "BEGIN {printf \"%.2f\", (${used_gpu_memory_kb}/${total_gpu_memory_kb})*100}")
+    # Парсинг значений видеопамяти
+    total_gpu_memory_kb=$(echo "$total_gpu_memory" | sed 's/[^0-9]*//g')000
+    used_gpu_memory_kb=$(echo "$used_gpu_memory" | sed 's/[^0-9]*//g')000
 
-# Вывод информации о видеопамяти
-echo "Nvidia Memory Usage: $(($used_gpu_memory_kb / 1024)) MiB / $(($total_gpu_memory_kb / 1024)) MiB (${gpu_memory_percentage}%)"
+    # Вычисление процентного использования
+    gpu_memory_percentage=$(awk "BEGIN {printf \"%.2f\", (${used_gpu_memory_kb}/${total_gpu_memory_kb})*100}")
+
+    # Вывод информации о видеопамяти
+    echo "Nvidia Memory Usage: $(($used_gpu_memory_kb / 1024)) MiB / $(($total_gpu_memory_kb / 1024)) MiB (${gpu_memory_percentage}%)"
+#else
+#    echo "Команда nvidia-smi не найдена. Продолжаем выполнение."
+    # Если команда не найдена, ничего не делаем и продолжаем скрипт
+fi
+
 
 g_flag=false
 
@@ -612,10 +641,14 @@ for arg in "$@"; do
 done
 
 if [ "$g_flag" = true ]; then
-  nvidia=$(nvidia-smi -q | grep -E "Process ID|Used GPU Memory|Name" | sed -e 's/^[ \t]*//' | grep '^Used GPU Memory\|^Name');
-  echo ""
-  printf "${nvidia}" | awk 'NR%2{printf "%s ", substr($0, index($0, $3))} !(NR%2){print $5, $6}'
-  echo ""
+  if command -v nvidia-smi > /dev/null 2>&1; then
+    nvidia=$(nvidia-smi -q | grep -E "Process ID|Used GPU Memory|Name" | sed -e 's/^[ \t]*//' | grep '^Used GPU Memory\|^Name');
+    echo ""
+    printf "${nvidia}" | awk 'NR%2{printf "%s ", substr($0, index($0, $3))} !(NR%2){print $5, $6}'
+    echo ""
+  else
+    echo "Команда nvidia-smi не найдена. Продолжаем выполнение."
+  fi
 fi
 
 #######################
