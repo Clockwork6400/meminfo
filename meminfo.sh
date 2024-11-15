@@ -570,21 +570,7 @@ fi
 #######################
 # GPU
 
-# Функция для парсинга памяти
-parse_memory() {
-    mem=$1
-    unit=$(echo ${mem} | sed 's/[0-9]*//g')
-    value=$(echo ${mem} | sed 's/[^0-9]*//g')
-    if [ "$unit" = "G" ]; then
-        echo $(($value * 1024 * 1024)) # Конвертация гигабайт в килобайты
-    elif [ "$unit" = "M" ]; then
-        echo $(($value * 1024)) # Конвертация мегабайтов в килобайты
-    elif [ "$unit" = "K" ]; then
-        echo $value # Килобайты остаются без изменений
-    else
-        echo $(($value * 1024 * 1024)) # Предполагаем гигабайты, если единицы измерения не указаны
-    fi
-}
+
 
 # Получение данных о видеопамяти
 ## Проверка существования команды nvidia-smi
@@ -611,6 +597,20 @@ parse_memory() {
 
 # Проверка существования команды nvidia-smi
 if command -v nvidia-smi > /dev/null 2>&1; then
+    parse_memory() {
+        mem=$1
+        unit=$(echo ${mem} | sed 's/[0-9]*//g')
+        value=$(echo ${mem} | sed 's/[^0-9]*//g')
+        if [ "$unit" = "G" ]; then
+            echo $(($value * 1024 * 1024)) # Конвертация гигабайт в килобайты
+        elif [ "$unit" = "M" ]; then
+            echo $(($value * 1024)) # Конвертация мегабайтов в килобайты
+        elif [ "$unit" = "K" ]; then
+            echo $value # Килобайты остаются без изменений
+        else
+            echo $(($value * 1024 * 1024)) # Предполагаем гигабайты, если единицы измерения не указаны
+        fi
+    }
     nvidia_smi_output=$(nvidia-smi -q)
 
     # Извлечение информации из вывода nvidia-smi
