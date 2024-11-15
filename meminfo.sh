@@ -112,16 +112,16 @@ if [ "$v_flag" = true ]; then
   if echo "$swap" | grep -q "Total"; then
     usage=$(echo "$swap" | awk '/Total/{print $5}' | sed 's/%//')
     if [ "$usage" -gt 60 ]; then
-      echo -e "${color_red}[Warning]${color_off}: swap_used ($usage%)."
+      echo -e "${color_red}[Warning]${color_off}: Swap used: ($usage%)."
     else
-      echo -e "${color_green}[Ok]${color_off}: swap_used ($usage%)"
+      echo -e "${color_green}[Ok]${color_off}: Swap used: ($usage%)"
     fi
   elif echo "$swap" | grep -q '^\/' ; then
     usage=$(echo "$swap" | awk '/^\//{print $5}' | sed 's/%//')
     if [ "$usage" -gt 60 ]; then
-      echo -e "${color_red}[Warning]${color_off}: swap_used ($usage%)."
+      echo -e "${color_red}[Warning]${color_off}: Swap used: ($usage%)."
     else
-      echo -e "${color_green}[Ok]${color_off}: swap_used ($usage%)"
+      echo -e "${color_green}[Ok]${color_off}: Swap used: ($usage%)"
     fi
   else
       echo -e "${color_green}[Ok]${color_off}: Нету свопа"
@@ -441,7 +441,31 @@ echo -e "\nпроцессов chrome: ${chrom}"
 firefox=$(ps -auxww | grep "firefox" | grep -v 'grep' | sort -nrk 4 | awk '{print $4 "%", $11}' | wc -l)
 echo -e "процессов firefox: ${firefox}\n"
 else
-  top -b -o res | awk '
+#  top -b -o res | awk '
+#function parse_memory(mem) {
+#    unit = substr(mem, length(mem), 1)
+#    value = substr(mem, 1, length(mem)-1)
+#    if (unit == "M") {
+#        return value * 1024
+#    } else if (unit == "K") {
+#        return value
+#    } else {
+#        return value / 1024 # На случай, если единицы измерения не указаны
+#    }
+#}
+#NR > 7 {
+#    if ($7 ~ /^[0-9]+[a-zA-Z]+$/) {
+#        mem = $7
+#        process_name = $12  # Имя процесса (последняя колонка)
+#        mem_value = parse_memory(mem)
+#        rss_sum_kb += mem_value
+##        print "Processed:", mem, "=", mem_value, "KB", process_name  # Отладочное сообщение с именем процесса
+#    }
+#}
+#END {
+#    print "Total RES Sum:", rss_sum_kb / 1024, "MiB"
+#}'
+top -b -o res | awk -v mem_total="$mem_total" '
 function parse_memory(mem) {
     unit = substr(mem, length(mem), 1)
     value = substr(mem, 1, length(mem)-1)
@@ -450,7 +474,7 @@ function parse_memory(mem) {
     } else if (unit == "K") {
         return value
     } else {
-        return value / 1024 # На случай, если единицы измерения не указаны
+        return value / 1024  # На случай, если единицы измерения не указаны
     }
 }
 NR > 7 {
@@ -463,10 +487,38 @@ NR > 7 {
     }
 }
 END {
-    print "Total RES Sum:", rss_sum_kb / 1024, "MiB"
+    rss_sum_mib = rss_sum_kb / 1024
+    usage_percentage = (rss_sum_mib / mem_total) * 100
+    printf "Total RES Sum: %.0f MiB (%.2f%%)\n", rss_sum_mib, usage_percentage
 }'
 #)
-top -b -o size | awk '
+#top -b -o size | awk '
+#function parse_memory(mem) {
+#    unit = substr(mem, length(mem), 1)
+#    value = substr(mem, 1, length(mem)-1)
+#    if (unit == "G") {
+#        return value * 1024 * 1024  # Конвертация гигабайт в килобайты
+#    } else if (unit == "M") {
+#        return value * 1024  # Конвертация мегабайтов в килобайты
+#    } else if (unit == "K") {
+#        return value  # Килобайты остаются без изменений
+#    } else {
+#        return value * 1024 * 1024  # На случай, если единицы измерения не указаны, предполагаем гигабайты
+#    }
+#}
+#NR > 7 {
+#    if ($6 ~ /^[0-9]+[a-zA-Z]+$/) {
+#        mem = $6
+#        process_name = $12  # Имя процесса (последняя колонка)
+#        mem_value = parse_memory(mem)
+#        size_sum_kb += mem_value
+##        print "Processed:", mem, "=", mem_value, "KB", process_name  # Отладочное сообщение с именем процесса
+#    }
+#}
+#END {
+#    print "Total SIZE Sum:", size_sum_kb / (1024 * 1024), "GiB"
+#}'
+top -b -o size | awk -v mem_total="$mem_total" '
 function parse_memory(mem) {
     unit = substr(mem, length(mem), 1)
     value = substr(mem, 1, length(mem)-1)
@@ -490,7 +542,9 @@ NR > 7 {
     }
 }
 END {
-    print "Total SIZE Sum:", size_sum_kb / (1024 * 1024), "GiB"
+    size_sum_gib = size_sum_kb / (1024 * 1024)
+    usage_percentage = (size_sum_gib * 1024 / mem_total) * 100
+    printf "Total SIZE Sum: %.0f GiB (%.2f%%)\n", size_sum_gib, usage_percentage
 }'
 fi
 
@@ -572,16 +626,26 @@ mem_arc_mib=$((mem_arc / 1024 / 1024))  # делим на 1024 дважды
 arc_max=$(sysctl -n vfs.zfs.arc_max)
 
 arc_max_auto=$(sysctl kstat.zfs.misc.arcstats.c_max | awk '{print int($2 / (1024 * 1024))" Mib"}')
+#arc_max_auto=$(sysctl kstat.zfs.misc.arcstats.c_max | awk '{print int($2 / (1024 * 1024))}')
 
 # Проверка значения arc_max
 if [ "$arc_max" -eq 0 ]; then
   arc_total="auto ($arc_max_auto)"
+  arc_max_mib=$arc_max_auto
 else
   arc_total=$( echo $((arc_max / 1024 / 1024)) Mib)  # переводим из байт в MiB
+  arc_total="${arc_max_mib} MiB"
 fi
 
 # Вывод значения arc_total
-echo "ARC Memory Usage: ${mem_arc_mib} MiB / ${arc_total}"
+#echo "ARC Memory Usage: ${mem_arc_mib} MiB / ${arc_total}"
+
+# Вычисление процента использования
+arc_usage_percentage=$(awk "BEGIN {printf \"%.2f\", (${mem_arc_mib}/${arc_max_mib})*100}")
+
+# Вывод значения arc_total с процентом
+echo "ARC Memory Usage: ${mem_arc_mib} MiB / ${arc_total} (${arc_usage_percentage}%)"
+
 
 ##Преимущества автоматического управления (vfs.zfs.arc_max=0):
 # - Динамическое регулирование: Система автоматически подстраивает размер ARC в зависимости от текущей нагрузки и потребностей.
