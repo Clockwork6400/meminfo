@@ -52,7 +52,8 @@ if [ "$h_flag" = true ]; then
 	-bb	bar-info
 	-d	disk
 	-e	net
-	-p	proc\n"
+	-p	proc
+	-g	gpu (nvidia)\n"
   exit 0
 fi
 
@@ -513,6 +514,57 @@ if [ "$b_flag" = true ]; then
 fi
 
 #######################
+# GPU
+
+# Функция для парсинга памяти
+parse_memory() {
+    mem=$1
+    unit=$(echo ${mem} | sed 's/[0-9]*//g')
+    value=$(echo ${mem} | sed 's/[^0-9]*//g')
+    if [ "$unit" = "G" ]; then
+        echo $(($value * 1024 * 1024)) # Конвертация гигабайт в килобайты
+    elif [ "$unit" = "M" ]; then
+        echo $(($value * 1024)) # Конвертация мегабайтов в килобайты
+    elif [ "$unit" = "K" ]; then
+        echo $value # Килобайты остаются без изменений
+    else
+        echo $(($value * 1024 * 1024)) # Предполагаем гигабайты, если единицы измерения не указаны
+    fi
+}
+
+# Получение данных о видеопамяти
+nvidia_smi_output=$(nvidia-smi -q)
+
+# Извлечение информации из вывода nvidia-smi
+total_gpu_memory=$(echo "$nvidia_smi_output" | grep -A3 "FB Memory Usage" | grep "Total" | awk '{print $3}')
+used_gpu_memory=$(echo "$nvidia_smi_output" | grep -A3 "FB Memory Usage" | grep "Used" | awk '{print $3}')
+
+# Парсинг значений видеопамяти
+total_gpu_memory_kb=$(parse_memory "$total_gpu_memory")
+used_gpu_memory_kb=$(parse_memory "$used_gpu_memory")
+
+# Вычисление процентного использования
+gpu_memory_percentage=$(awk "BEGIN {printf \"%.2f\", (${used_gpu_memory_kb}/${total_gpu_memory_kb})*100}")
+
+# Вывод информации о видеопамяти
+echo "Nvidia Memory Usage: $(($used_gpu_memory_kb / 1024)) MiB / $(($total_gpu_memory_kb / 1024)) MiB (${gpu_memory_percentage}%)"
+
+g_flag=false
+
+for arg in "$@"; do
+  if [ "$arg" = "-g" ]; then
+    g_flag=true
+  fi
+done
+
+if [ "$g_flag" = true ]; then
+  nvidia=$(nvidia-smi -q | grep -E "Process ID|Used GPU Memory|Name" | sed -e 's/^[ \t]*//' | grep '^Used GPU Memory\|^Name');
+  echo ""
+  printf "${nvidia}" | awk 'NR%2{printf "%s ", substr($0, index($0, $3))} !(NR%2){print $5, $6}'
+  echo ""
+fi
+
+#######################
 mem_arc=$(sysctl -n kstat.zfs.misc.arcstats.size)
 mem_arc_mib=$((mem_arc / 1024 / 1024))  # делим на 1024 дважды
 
@@ -530,8 +582,6 @@ fi
 
 # Вывод значения arc_total
 echo "ARC Memory Usage: ${mem_arc_mib} MiB / ${arc_total}"
-
-
 
 ##Преимущества автоматического управления (vfs.zfs.arc_max=0):
 # - Динамическое регулирование: Система автоматически подстраивает размер ARC в зависимости от текущей нагрузки и потребностей.
