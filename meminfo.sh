@@ -101,8 +101,8 @@ if [ "$v_flag" = true ]; then
   # Проверка транзитных страниц
   if [ "$(( $mem_intrans / 1024 / 1024 ))" -gt "$mem_total" ]; then
     echo -e "${color_red}[Critical]${color_off}: mem_intrans ($mem_intrans) превышает mem_total!"
-  #  uptime=$(LANG=en_US.UTF-8 uptime | sed -n 's/.*up \([^,]*\),.*/\1/p')
-  #  echo "	UPTIME: ${uptime}"
+    uptime=$(LANG=en_US.UTF-8 uptime | sed -n 's/.*up \([^,]*\),.*/\1/p')
+    echo "	UPTIME: ${uptime}"
   #else
   #  echo -e "${color_green}[Ok]${color_off}: Транзитные страницы в норме."
   fi
@@ -387,7 +387,31 @@ for arg in "$@"; do
 done
 
 if [ "$p_flag" = true ]; then
-  top -b  | awk '
+#  top -b  | awk '
+#function parse_memory(mem) {
+#    unit = substr(mem, length(mem), 1)
+#    value = substr(mem, 1, length(mem)-1)
+#    if (unit == "M") {
+#        return value * 1024
+#    } else if (unit == "K") {
+#        return value
+#    } else {
+#        return value / 1024 # На случай, если единицы измерения не указаны
+#    }
+#}
+#NR > 7 {
+#    if ($7 ~ /^[0-9]+[a-zA-Z]+$/) {
+#        mem = $7
+#        process_name = $12  # Имя процесса (последняя колонка)
+#        mem_value = parse_memory(mem)
+#        rss_sum_kb += mem_value
+#        print "Processed:", mem, "=", mem_value, "KB", process_name  # Отладочное сообщение с именем процесса
+#    }
+#}
+#END {
+#    print "Total RSS Sum:", rss_sum_kb / 1024, "MiB"
+#}'
+top -b -o res | awk '
 function parse_memory(mem) {
     unit = substr(mem, length(mem), 1)
     value = substr(mem, 1, length(mem)-1)
@@ -409,14 +433,14 @@ NR > 7 {
     }
 }
 END {
-    print "Total RSS Sum:", rss_sum_kb / 1024, "MiB"
-}'
+    print "Total RES Sum:", rss_sum_kb / 1024, "MiB"
+}' #Для большей точности сортировка по res
 chrom=$(ps -auxww | grep "chrom" | grep -v 'grep' | sort -nrk 4 | awk '{print $4 "%", $11}' | wc -l)
 echo -e "\nпроцессов chrome: ${chrom}"
 firefox=$(ps -auxww | grep "firefox" | grep -v 'grep' | sort -nrk 4 | awk '{print $4 "%", $11}' | wc -l)
 echo -e "процессов firefox: ${firefox}\n"
 else
-  top -b  | awk '
+  top -b -o res | awk '
 function parse_memory(mem) {
     unit = substr(mem, length(mem), 1)
     value = substr(mem, 1, length(mem)-1)
@@ -438,9 +462,35 @@ NR > 7 {
     }
 }
 END {
-    print "Total RSS Sum:", rss_sum_kb / 1024, "MiB"
+    print "Total RES Sum:", rss_sum_kb / 1024, "MiB"
 }'
 #)
+top -b -o size | awk '
+function parse_memory(mem) {
+    unit = substr(mem, length(mem), 1)
+    value = substr(mem, 1, length(mem)-1)
+    if (unit == "G") {
+        return value * 1024 * 1024  # Конвертация гигабайт в килобайты
+    } else if (unit == "M") {
+        return value * 1024  # Конвертация мегабайтов в килобайты
+    } else if (unit == "K") {
+        return value  # Килобайты остаются без изменений
+    } else {
+        return value * 1024 * 1024  # На случай, если единицы измерения не указаны, предполагаем гигабайты
+    }
+}
+NR > 7 {
+    if ($6 ~ /^[0-9]+[a-zA-Z]+$/) {
+        mem = $6
+        process_name = $12  # Имя процесса (последняя колонка)
+        mem_value = parse_memory(mem)
+        size_sum_kb += mem_value
+#        print "Processed:", mem, "=", mem_value, "KB", process_name  # Отладочное сообщение с именем процесса
+    }
+}
+END {
+    print "Total SIZE Sum:", size_sum_kb / (1024 * 1024), "GiB"
+}'
 fi
 
 b_flag=false
