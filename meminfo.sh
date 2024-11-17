@@ -249,32 +249,48 @@ if [ "$v_flag" = true ]; then
   # gpart add -t freebsd-swap -l swap0 ada0
   # swapon /dev/ada0p3
 
-# Проверка зарезервированного свопа
-critical_reserved_threshold=$((total_swap / 10))  # 10% от общего объема свопа
+  # Проверка общего объема оперативной памяти
+  total_mem=$(sysctl -n hw.physmem)
+  total_mem_gb=$((total_mem / 1024 / 1024 / 1024))
+  # Установка флага в зависимости от объема оперативной памяти
+  if [ "$total_mem_gb" -gt 8 ]; then
+    mem_flag="8mem"
+  else
+    mem_flag="no8mem"
+  fi
 
   swap_reserved=$(sysctl -n vm.swap_reserved)
+  if [ "$mem_flag" = "8mem" ]; then
+    critical_reserved_threshold=$((total_mem * 30 / 100))  # 30% от объема оперативной памяти
+  else
+    critical_reserved_threshold=$((total_mem * 20 / 100))  # 20% от объема оперативной памяти
+  fi
+
+  porog=$(( $critical_reserved_threshold / 1024 / 1024 ))
+  wreser=$(( $swap_reserved / 1024 / 1024 ))
   if [ "$swap_reserved" -gt "$critical_reserved_threshold" ]; then
-    echo -e "${color_red}[Warning]${color_off}: swap_reserved: $swap_reserved превышает критический порог $critical_reserved_threshold"
+	  echo -e "${color_red}[Warning]${color_off}: swap_reserved: $swap_reserved ($wreser Mib) превышает критический порог $porog Mib"
   fi
-  
-  # Проверка copy-on-write faults
-  
-  # Проверка на превышение порогов
-  cow_faults=$(vmstat -s | grep 'copy-on-write faults' | awk '{print $1}')
-  if [ "$cow_faults" -gt 5000000 ]; then
-    echo -e "${color_red}[Warning]${color_off}: Чрезмерное использование механизма COW на высоких нагрузках $cow_faults"
-  fi
-  
-  # Проверка значения vm.stats.vm.v_io_faults
-  io_faults=$(sysctl -n vm.stats.vm.v_io_faults)
-  if [ "$io_faults" -gt 500000 ]; then
-    echo -e "${color_red}[Warning]${color_off}: Проблемы с вводом-выводом, io_faults: $io_faults"
-  fi
-  
-  # Проверка значения vm.stats.vm.v_cow_faults
-  cow_faults=$(sysctl -n vm.stats.vm.v_cow_faults)
-  if [ "$cow_faults" -gt 2000000000 ]; then
-    echo -e "${color_red}[Warning]${color_off}: Чрезмерное использование механизма COW, cow_faults: $cow_faults"
+
+  zfs_count=$(df -T | awk 'BEGIN{n=0};{if($2=="zfs"){n++}};END{print n}')
+  if [ "$zfs_count" -ne 0 ]; then
+    # Проверка copy-on-write faults 
+    cow_faults=$(vmstat -s | grep 'copy-on-write faults' | awk '{print $1}')
+    if [ "$cow_faults" -gt 5000000 ]; then
+      echo -e "${color_red}[Warning]${color_off}: Чрезмерное использование механизма COW на высоких нагрузках $cow_faults"
+    fi
+    
+    # Проверка значения vm.stats.vm.v_io_faults
+    io_faults=$(sysctl -n vm.stats.vm.v_io_faults)
+    if [ "$io_faults" -gt 500000 ]; then
+      echo -e "${color_red}[Warning]${color_off}: Проблемы с вводом-выводом, io_faults: $io_faults"
+    fi
+    
+    # Проверка значения vm.stats.vm.v_cow_faults
+    cow_faults=$(sysctl -n vm.stats.vm.v_cow_faults)
+    if [ "$cow_faults" -gt 2000000000 ]; then
+      echo -e "${color_red}[Warning]${color_off}: Чрезмерное использование механизма COW, cow_faults: $cow_faults"
+    fi
   fi
 
 
@@ -546,6 +562,12 @@ END {
     usage_percentage = (size_sum_gib * 1024 / mem_total) * 100
     printf "Total SIZE Sum: %.0f GiB (%.2f%%)\n", size_sum_gib, usage_percentage
 }'
+# VIRT включает в себя:
+#    Фактически используемую оперативную память (RES).
+#    Память, выделенную, но не используемую.
+#    Память, выделенную для общего использования (shared memory).
+#    Память, которая может быть сброшена или пересчитана.
+#    Память, которая подлежит свопу.
 fi
 
 b_flag=false
@@ -652,32 +674,64 @@ if [ "$g_flag" = true ]; then
 fi
 
 #######################
-mem_arc=$(sysctl -n kstat.zfs.misc.arcstats.size)
-mem_arc_mib=$((mem_arc / 1024 / 1024))  # делим на 1024 дважды
+# Если ZFS, то проверяем ARC:
 
-# Получаем значение arc_max
-arc_max=$(sysctl -n vfs.zfs.arc_max)
+#zfs_count=$(df -hT | awk '{if($2=="zfs"){print $1}}' | wc -l)
+#zfs_count=$(df -T | awk 'BEGIN{n=0};{if($2=="zfs"){n++}};END{print n}')
+if [ "$zfs_count" -ne 0 ]; then
+    # Основной код для обработки ARC памяти
+    mem_arc=$(sysctl -n kstat.zfs.misc.arcstats.size)
+    mem_arc_mib=$((mem_arc / 1024 / 1024))  # делим на 1024 дважды
 
-arc_max_auto=$(sysctl kstat.zfs.misc.arcstats.c_max | awk '{print int($2 / (1024 * 1024))" Mib"}')
-#arc_max_auto=$(sysctl kstat.zfs.misc.arcstats.c_max | awk '{print int($2 / (1024 * 1024))}')
+    # Получаем значение arc_max
+    arc_max=$(sysctl -n vfs.zfs.arc_max)
+    arc_max_auto=$(sysctl kstat.zfs.misc.arcstats.c_max | awk '{print int($2 / (1024 * 1024))}')
 
-# Проверка значения arc_max
-if [ "$arc_max" -eq 0 ]; then
-  arc_total="auto ($arc_max_auto)"
-  arc_max_mib=$arc_max_auto
-else
-  arc_total=$( echo $((arc_max / 1024 / 1024)) Mib)  # переводим из байт в MiB
-  arc_total="${arc_max_mib} MiB"
+    # Проверка значения arc_max
+    if [ "$arc_max" -eq 0 ]; then
+        arc_total="auto (${arc_max_auto} MiB)"
+        arc_max_mib=$arc_max_auto
+    else
+        arc_max_mib=$((arc_max / 1024 / 1024))  # переводим из байт в MiB
+        arc_total="${arc_max_mib} MiB"
+    fi
+
+    # Вычисление процента использования
+    arc_usage_percentage=$(awk "BEGIN {printf \"%.2f\", (${mem_arc_mib}/${arc_max_mib})*100}")
+
+    # Вывод значения arc_total с процентом
+    echo "ARC Memory Usage: ${mem_arc_mib} MiB / ${arc_total} (${arc_usage_percentage}%)"
+#else
+#    echo "[ok]: ARC не найден."
+    # Если ZFS не найден, ничего не делаем и продолжаем скрипт
 fi
 
-# Вывод значения arc_total
-#echo "ARC Memory Usage: ${mem_arc_mib} MiB / ${arc_total}"
-
-# Вычисление процента использования
-arc_usage_percentage=$(awk "BEGIN {printf \"%.2f\", (${mem_arc_mib}/${arc_max_mib})*100}")
-
-# Вывод значения arc_total с процентом
-echo "ARC Memory Usage: ${mem_arc_mib} MiB / ${arc_total} (${arc_usage_percentage}%)"
+#mem_arc=$(sysctl -n kstat.zfs.misc.arcstats.size)
+#mem_arc_mib=$((mem_arc / 1024 / 1024))  # делим на 1024 дважды
+#
+## Получаем значение arc_max
+#arc_max=$(sysctl -n vfs.zfs.arc_max)
+#
+#arc_max_auto=$(sysctl kstat.zfs.misc.arcstats.c_max | awk '{print int($2 / (1024 * 1024))" Mib"}')
+##arc_max_auto=$(sysctl kstat.zfs.misc.arcstats.c_max | awk '{print int($2 / (1024 * 1024))}')
+#
+## Проверка значения arc_max
+#if [ "$arc_max" -eq 0 ]; then
+#  arc_total="auto ($arc_max_auto)"
+#  arc_max_mib=$arc_max_auto
+#else
+#  arc_total=$( echo $((arc_max / 1024 / 1024)) Mib)  # переводим из байт в MiB
+#  arc_total="${arc_max_mib} MiB"
+#fi
+#
+## Вывод значения arc_total
+##echo "ARC Memory Usage: ${mem_arc_mib} MiB / ${arc_total}"
+#
+## Вычисление процента использования
+#arc_usage_percentage=$(awk "BEGIN {printf \"%.2f\", (${mem_arc_mib}/${arc_max_mib})*100}")
+#
+## Вывод значения arc_total с процентом
+#echo "ARC Memory Usage: ${mem_arc_mib} MiB / ${arc_total} (${arc_usage_percentage}%)"
 
 
 ##Преимущества автоматического управления (vfs.zfs.arc_max=0):
