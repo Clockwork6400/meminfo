@@ -90,6 +90,9 @@ mem_total=$(( $(sysctl -n hw.physmem) / 1024 / 1024 ))
 # Получаем количество страниц в транзите
 mem_intrans=$(( $(sysctl -n vm.stats.vm.v_intrans) * hw_pagesize ))
 
+# Проверка FS:
+zfs_count=$(df -T | awk 'BEGIN{n=0};{if($2=="zfs"){n++}};END{print n}')
+
 v_flag=false
 
 for arg in "$@"; do
@@ -272,7 +275,6 @@ if [ "$v_flag" = true ]; then
 	  echo -e "${color_red}[Warning]${color_off}: swap_reserved: $swap_reserved ($wreser Mib) превышает критический порог $porog Mib"
   fi
 
-  zfs_count=$(df -T | awk 'BEGIN{n=0};{if($2=="zfs"){n++}};END{print n}')
   if [ "$zfs_count" -ne 0 ]; then
     # Проверка copy-on-write faults 
     cow_faults=$(vmstat -s | grep 'copy-on-write faults' | awk '{print $1}')
