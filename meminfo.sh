@@ -272,7 +272,7 @@ if [ "$v_flag" = true ]; then
   porog=$(( $critical_reserved_threshold / 1024 / 1024 ))
   wreser=$(( $swap_reserved / 1024 / 1024 ))
   if [ "$swap_reserved" -gt "$critical_reserved_threshold" ]; then
-	  echo -e "${color_red}[Warning]${color_off}: swap_reserved: $swap_reserved ($wreser Mib) превышает критический порог $porog Mib"
+	  echo -e "${color_red}[Warning]${color_off}: swap_reserved: $swap_reserved ($wreser MiB) превышает критический порог $porog MiB"
   fi
 
   if [ "$zfs_count" -ne 0 ]; then
@@ -338,7 +338,7 @@ mem_used_percentage=$(( mem_used * 100 / mem_total ))
 mem_free="$(((mem_inactive + mem_unused + mem_cache) / 1024 / 1024))"
 mem_free_percentage=$(( 100 - mem_free * 100 / mem_total))
 
-echo -e "${color_green}[meminfo]${color_off}: Memory: $(( ${mem_total} - ${mem_free} )) Mib / ${mem_total} Mib (${mem_free_percentage}%)"
+echo -e "${color_green}[meminfo]${color_off}: Memory: $(( ${mem_total} - ${mem_free} )) MiB / ${mem_total} MiB (${mem_free_percentage}%)"
 #printf "Active: ${mem_active},\nWired: ${mem_wired},\nLaundry: ${mem_laundry},\nBuf: ${mem_buf},\nReserved: ${mem_reserved},\nIntrans: ${mem_intrans}\n\n"
 #printf "Inact: ${mem_inactive}\nUnused: ${mem_unused}\nCache: ${mem_cache}\n"
 #echo ""
@@ -389,7 +389,7 @@ for arg in "$@"; do
 done
 
 if [ "$bb_flag" = true ]; then
-  printf "Wired: $(( $mem_wired / 1024 / 1024 )) Mib ${color_red}|${color_off}, Active: $(( $mem_active / 1024 / 1024 )) Mib ${color_green}|${color_off}, \nLaundary: $(( ${mem_laundry} / 1024 / 1024 )) Mib ${color_yellow}|${color_off}, Buf: $(( ${mem_buf} / 1024 / 1024 )) Mib ${color_blue}|${color_off}, \nReserved: $(( ${mem_reserved} / 1024 / 1024 )) Mib ${color_teal}|${color_off}, Intrans: $(( ${mem_intrans} / 1024 / 1024 )) Mib ${color_purple}|${color_off}, \nFree: ${mem_free} Mib ${color_grey}|${color_off}\n\n"
+  printf "Wired: $(( $mem_wired / 1024 / 1024 )) MiB ${color_red}|${color_off}, Active: $(( $mem_active / 1024 / 1024 )) MiB ${color_green}|${color_off}, \nLaundary: $(( ${mem_laundry} / 1024 / 1024 )) MiB ${color_yellow}|${color_off}, Buf: $(( ${mem_buf} / 1024 / 1024 )) MiB ${color_blue}|${color_off}, \nReserved: $(( ${mem_reserved} / 1024 / 1024 )) MiB ${color_teal}|${color_off}, Intrans: $(( ${mem_intrans} / 1024 / 1024 )) MiB ${color_purple}|${color_off}, \nFree: ${mem_free} MiB ${color_grey}|${color_off}\n\n"
 else
   printf "\n"
 fi
@@ -714,7 +714,7 @@ fi
 ## Получаем значение arc_max
 #arc_max=$(sysctl -n vfs.zfs.arc_max)
 #
-#arc_max_auto=$(sysctl kstat.zfs.misc.arcstats.c_max | awk '{print int($2 / (1024 * 1024))" Mib"}')
+#arc_max_auto=$(sysctl kstat.zfs.misc.arcstats.c_max | awk '{print int($2 / (1024 * 1024))" MiB"}')
 ##arc_max_auto=$(sysctl kstat.zfs.misc.arcstats.c_max | awk '{print int($2 / (1024 * 1024))}')
 #
 ## Проверка значения arc_max
@@ -722,7 +722,7 @@ fi
 #  arc_total="auto ($arc_max_auto)"
 #  arc_max_mib=$arc_max_auto
 #else
-#  arc_total=$( echo $((arc_max / 1024 / 1024)) Mib)  # переводим из байт в MiB
+#  arc_total=$( echo $((arc_max / 1024 / 1024)) MiB)  # переводим из байт в MiB
 #  arc_total="${arc_max_mib} MiB"
 #fi
 #
