@@ -53,6 +53,7 @@ if [ "$h_flag" = true ]; then
 	-d	disk
 	-e	net
 	-p	proc
+	-j	jails sum
 	-g	gpu (nvidia)\n"
   exit 0
 fi
@@ -397,6 +398,15 @@ fi
 ################################
 #rss=$(
 
+get_sysctl_value() {
+    sysctl -n $1 2>/dev/null
+}
+
+# Проверка значений sysctl параметров
+see_jail_proc=$(get_sysctl_value security.bsd.see_jail_proc)
+see_other_gids=$(get_sysctl_value security.bsd.see_other_gids)
+see_other_uids=$(get_sysctl_value security.bsd.see_other_uids)
+
 p_flag=false
 
 for arg in "$@"; do
@@ -406,6 +416,7 @@ for arg in "$@"; do
 done
 
 if [ "$p_flag" = true ]; then
+jails_memory=0
 #  top -b  | awk '
 #function parse_memory(mem) {
 #    unit = substr(mem, length(mem), 1)
@@ -453,12 +464,23 @@ NR > 7 {
 }
 END {
     print "Total RES Sum:", rss_sum_kb / 1024, "MiB"
-}' #Для большей точности сортировка по res
+}'
+  if [ "$(id -u)" -ne 0 ] && [ "$see_other_uids" -eq 0 ]; then
+    printf "${color_yellow}[Warning]${color_off}: Процессы других пользователей не видны пользователю.\n"
+  fi
+#Для большей точности сортировка по res
 chrom=$(ps -auxww | grep "chrom" | grep -v 'grep' | sort -nrk 4 | awk '{print $4 "%", $11}' | wc -l)
 echo -e "\nпроцессов chrome: ${chrom}"
 firefox=$(ps -auxww | grep "firefox" | grep -v 'grep' | sort -nrk 4 | awk '{print $4 "%", $11}' | wc -l)
 echo -e "процессов firefox: ${firefox}\n"
 else
+  if [ "$(id -u)" -ne 0 ] && [ "$see_other_gids" -eq 0 ]; then
+    printf "${color_yellow}[Warning]${color_off}: Процессы других gids не видны пользователю.\n"
+  fi
+
+  if [ "$(id -u)" -ne 0 ] && [ "$see_other_uids" -eq 0 ]; then
+    printf "${color_yellow}[Warning]${color_off}: Процессы других пользователей не видны пользователю.\n"
+  else
 #  top -b -o res | awk '
 #function parse_memory(mem) {
 #    unit = substr(mem, length(mem), 1)
@@ -509,7 +531,6 @@ END {
     usage_percentage = (rss_sum_mib / mem_total) * 100
     printf "Total RES Sum: %.0f MiB (%.2f%%)\n", rss_sum_mib, usage_percentage
 }'
-#)
 #top -b -o size | awk '
 #function parse_memory(mem) {
 #    unit = substr(mem, length(mem), 1)
@@ -536,6 +557,88 @@ END {
 #END {
 #    print "Total SIZE Sum:", size_sum_kb / (1024 * 1024), "GiB"
 #}'
+############JAIL'S
+if [ "$(id -u)" -ne 0 ] && [ "$see_jail_proc" -eq 0 ]; then
+  printf "${color_yellow}[Warning]${color_off}: Процессы JAIL's не видны пользователю.\n"
+else
+convert_memory() {
+    value=$1
+    unit="KiB"  # Изменено на KiB для точности в двоичной системе
+    
+    if [ "$value" -ge 1073741824 ]; then
+        value=$(echo "scale=2; $value / 1073741824" | bc)
+        unit="GiB"
+    elif [ "$value" -ge 1048576 ]; then
+        value=$(echo "scale=2; $value / 1048576" | bc)
+        unit="MiB"
+    elif [ "$value" -ge 1024 ]; then
+        value=$(echo "scale=2; $value / 1024" | bc)
+        unit="KiB"
+    fi
+
+    echo "$value $unit"
+}
+jails_memory=0
+for jail in $(jls | grep -v JID | awk '{print $1}'); do
+  jail_memory=$(top -b -J $jail -o res | awk 'NR>8 {sum += $7} END {print sum}')
+  j_flag=false
+  for arg in "$@"; do
+    if [ "$arg" = "-j" ]; then
+      j_flag=true
+    fi
+  done
+  if [ "$j_flag" = true ]; then
+    converted_jail_memory=$(convert_memory $jail_memory)
+#    echo "Memory used by jail $jail: $jail_memory"
+    echo "Memory used by jail $jail: $converted_jail_memory"
+  fi
+  jails_memory=$(echo "$jails_memory + $jail_memory" | bc)
+done
+
+#echo "Total JAIL's Sum: $jails_memory"
+converted_jails_memory=$(convert_memory $jails_memory)
+echo "Total JAIL's Sum: $converted_jails_memory"
+fi
+##############VM's:
+# Извлекаем и суммируем значения памяти виртуальных машин
+total_bytes=$(top -b | grep bhyve | awk '
+{
+    value = substr($7, 1, length($7) - 1)  # Числовая часть
+    unit = substr($7, length($7))          # Единица измерения
+
+    if (unit == "K" || unit == "k") value *= 1024
+    else if (unit == "M" || unit == "m") value *= 1048576
+    else if (unit == "G" || unit == "g") value *= 1073741824
+    else if (unit == "B" || unit == "b") value *= 1
+
+    total += value
+}
+END { print total }')
+
+# Преобразуем итоговый размер в человекочитаемый формат
+if [ "$total_bytes" -ge 1099511627776 ]; then
+    total_vms=$(echo "scale=2; $total_bytes / 1099511627776" | bc)
+    unit="TiB"
+elif [ "$total_bytes" -ge 1073741824 ]; then
+    total_vms=$(echo "scale=2; $total_bytes / 1073741824" | bc)
+    unit="GiB"
+elif [ "$total_bytes" -ge 1048576 ]; then
+    total_vms=$(echo "scale=2; $total_bytes / 1048576" | bc)
+    unit="MiB"
+elif [ "$total_bytes" -ge 1024 ]; then
+    total_vms=$(echo "scale=2; $total_bytes / 1024" | bc)
+    unit="KiB"
+else
+    total_vms=$total_bytes
+    unit="B"
+fi
+
+# Выводим результат
+echo "Total VM's Sum: $total_vms $unit"
+
+
+##############
+
 top -b -o size | awk -v mem_total="$mem_total" '
 function parse_memory(mem) {
     unit = substr(mem, length(mem), 1)
@@ -570,6 +673,7 @@ END {
 #    Память, выделенную для общего использования (shared memory).
 #    Память, которая может быть сброшена или пересчитана.
 #    Память, которая подлежит свопу.
+  fi
 fi
 
 b_flag=false
