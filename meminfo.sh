@@ -442,29 +442,71 @@ jails_memory=0
 #    print "Total RSS Sum:", rss_sum_kb / 1024, "MiB"
 #}'
 top -b -o res | awk '
+# Функция для преобразования памяти в килобайты
 function parse_memory(mem) {
-    unit = substr(mem, length(mem), 1)
-    value = substr(mem, 1, length(mem)-1)
-    if (unit == "M") {
+    unit = substr(mem, length(mem), 1)  # Единица измерения
+    value = substr(mem, 1, length(mem)-1)  # Числовая часть
+
+    # Преобразование в килобайты
+    if (unit == "T" || unit == "t") {
+        return value * 1099511627776 / 1024
+    } else if (unit == "G" || unit == "g") {
+        return value * 1073741824 / 1024
+    } else if (unit == "M" || unit == "m") {
         return value * 1024
-    } else if (unit == "K") {
+    } else if (unit == "K" || unit == "k") {
         return value
+    } else if (unit == "B" || unit == "b") {
+        return value / 1024
     } else {
-        return value / 1024 # На случай, если единицы измерения не указаны
+        return 0  # Неправильный формат
     }
 }
+
+# Основная логика
 NR > 7 {
+    # Убедимся, что формат RES правильный
     if ($7 ~ /^[0-9]+[a-zA-Z]+$/) {
         mem = $7
         process_name = $12  # Имя процесса (последняя колонка)
-        mem_value = parse_memory(mem)
-        rss_sum_kb += mem_value
-        print "Processed:", mem, "=", mem_value, "KB", process_name  # Отладочное сообщение с именем процесса
+        mem_value_kb = parse_memory(mem)  # Преобразование в килобайты
+        rss_sum_kb += mem_value_kb  # Суммируем в килобайтах
+
+        # Отладочное сообщение для каждого процесса
+        print "Processed:", mem, "=", mem_value_kb, "KB", process_name
     }
 }
+
+# Итоговый расчёт
 END {
-    print "Total RES Sum:", rss_sum_kb / 1024, "MiB"
+    # Преобразуем итог в мегабайты
+    total_mib = rss_sum_kb / 1024
+    print "Total RES Sum:", total_mib, "MiB"
 }'
+#top -b -o res | awk '
+#function parse_memory(mem) {
+#    unit = substr(mem, length(mem), 1)
+#    value = substr(mem, 1, length(mem)-1)
+#    if (unit == "M") {
+#        return value * 1024
+#    } else if (unit == "K") {
+#        return value
+#    } else {
+#        return value / 1024 # На случай, если единицы измерения не указаны
+#    }
+#}
+#NR > 7 {
+#    if ($7 ~ /^[0-9]+[a-zA-Z]+$/) {
+#        mem = $7
+#        process_name = $12  # Имя процесса (последняя колонка)
+#        mem_value = parse_memory(mem)
+#        rss_sum_kb += mem_value
+#        print "Processed:", mem, "=", mem_value, "KB", process_name  # Отладочное сообщение с именем процесса
+#    }
+#}
+#END {
+#    print "Total RES Sum:", rss_sum_kb / 1024, "MiB"
+#}'
   if [ "$(id -u)" -ne 0 ] && [ "$see_other_uids" -eq 0 ]; then
     printf "${color_yellow}[Warning]${color_off}: Процессы других пользователей не видны пользователю.\n"
   fi
@@ -505,32 +547,71 @@ else
 #END {
 #    print "Total RES Sum:", rss_sum_kb / 1024, "MiB"
 #}'
+#top -b -o res | awk -v mem_total="$mem_total" '
+#function parse_memory(mem) {
+#    unit = substr(mem, length(mem), 1)
+#    value = substr(mem, 1, length(mem)-1)
+#    if (unit == "M") {
+#        return value * 1024
+#    } else if (unit == "K") {
+#        return value
+#    } else {
+#        return value / 1024  # На случай, если единицы измерения не указаны
+#    }
+#}
+#NR > 7 {
+#    if ($7 ~ /^[0-9]+[a-zA-Z]+$/) {
+#        mem = $7
+#        process_name = $12  # Имя процесса (последняя колонка)
+#        mem_value = parse_memory(mem)
+#        rss_sum_kb += mem_value
+##        print "Processed:", mem, "=", mem_value, "KB", process_name  # Отладочное сообщение с именем процесса
+#    }
+#}
+#END {
+#    rss_sum_mib = rss_sum_kb / 1024
+#    usage_percentage = (rss_sum_mib / mem_total) * 100
+#    printf "Total RES Sum: %.0f MiB (%.2f%%)\n", rss_sum_mib, usage_percentage
+#}'
+
 top -b -o res | awk -v mem_total="$mem_total" '
+# Функция для преобразования памяти в килобайты
 function parse_memory(mem) {
-    unit = substr(mem, length(mem), 1)
-    value = substr(mem, 1, length(mem)-1)
-    if (unit == "M") {
+    unit = substr(mem, length(mem), 1)  # Единица измерения
+    value = substr(mem, 1, length(mem)-1)  # Числовая часть
+
+    # Преобразование в килобайты
+    if (unit == "T" || unit == "t") {
+        return value * 1099511627776 / 1024
+    } else if (unit == "G" || unit == "g") {
+        return value * 1073741824 / 1024
+    } else if (unit == "M" || unit == "m") {
         return value * 1024
-    } else if (unit == "K") {
+    } else if (unit == "K" || unit == "k") {
         return value
+    } else if (unit == "B" || unit == "b") {
+        return value / 1024
     } else {
-        return value / 1024  # На случай, если единицы измерения не указаны
+        return 0  # Неправильный формат
     }
 }
+
+# Основная логика
 NR > 7 {
-    if ($7 ~ /^[0-9]+[a-zA-Z]+$/) {
+    if ($7 ~ /^[0-9]+[a-zA-Z]+$/) {  # Проверяем формат RES
         mem = $7
-        process_name = $12  # Имя процесса (последняя колонка)
-        mem_value = parse_memory(mem)
-        rss_sum_kb += mem_value
-#        print "Processed:", mem, "=", mem_value, "KB", process_name  # Отладочное сообщение с именем процесса
+        mem_value = parse_memory(mem)  # Преобразуем в килобайты
+        rss_sum_kb += mem_value  # Суммируем
     }
 }
+
+# Итоговые расчёты
 END {
-    rss_sum_mib = rss_sum_kb / 1024
-    usage_percentage = (rss_sum_mib / mem_total) * 100
-    printf "Total RES Sum: %.0f MiB (%.2f%%)\n", rss_sum_mib, usage_percentage
+    rss_sum_mib = rss_sum_kb / 1024  # Переводим в мегабайты
+    usage_percentage = (rss_sum_mib / mem_total) * 100  # Рассчитываем процент
+    printf "Total RES Sum: %.0f MiB (%.2f%% of total memory)\n", rss_sum_mib, usage_percentage
 }'
+
 #top -b -o size | awk '
 #function parse_memory(mem) {
 #    unit = substr(mem, length(mem), 1)
