@@ -611,6 +611,7 @@ END {
     usage_percentage = (rss_sum_mib / mem_total) * 100  # Рассчитываем процент
     printf "Total RES Sum: %.0f MiB (%.2f%% of total memory)\n", rss_sum_mib, usage_percentage
 }'
+  fi
 
 #top -b -o size | awk '
 #function parse_memory(mem) {
@@ -681,6 +682,9 @@ converted_jails_memory=$(convert_memory $jails_memory)
 echo "Total JAIL's Sum: $converted_jails_memory"
 fi
 ##############VM's:
+  if [ "$(id -u)" -ne 0 ] && [ "$see_other_uids" -eq 0 ]; then
+#    printf "${color_yellow}[Warning]${color_off}: Процессы других пользователей не видны пользователю.\n"
+  else
 # Извлекаем и суммируем значения памяти виртуальных машин
 total_bytes=$(top -b | grep bhyve | awk '
 {
