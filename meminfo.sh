@@ -510,6 +510,7 @@ END {
   if [ "$(id -u)" -ne 0 ] && [ "$see_other_uids" -eq 0 ]; then
     printf "${color_yellow}[Warning]${color_off}: Процессы других пользователей не видны пользователю.\n"
   fi
+  ps aux | awk 'NR > 1 {rss_sum += $6} END {printf "Total RSS Sum: %.2f MiB\n", rss_sum / 1024}'
 #Для большей точности сортировка по res
 chrom=$(ps -auxww | grep "chrom" | grep -v 'grep' | sort -nrk 4 | awk '{print $4 "%", $11}' | wc -l)
 echo -e "\nпроцессов chrome: ${chrom}"
@@ -611,6 +612,7 @@ END {
     usage_percentage = (rss_sum_mib / mem_total) * 100  # Рассчитываем процент
     printf "Total RES Sum: %.0f MiB (%.2f%% of total memory)\n", rss_sum_mib, usage_percentage
 }'
+  ps aux | awk 'NR > 1 {rss_sum += $6} END {printf "Total RSS Sum: %.2f MiB\n", rss_sum / 1024}'
   fi
 
 #top -b -o size | awk '
@@ -682,9 +684,14 @@ converted_jails_memory=$(convert_memory $jails_memory)
 echo "Total JAIL's Sum: $converted_jails_memory"
 fi
 ##############VM's:
-  if [ "$(id -u)" -ne 0 ] && [ "$see_other_uids" -eq 0 ]; then
-#    printf "${color_yellow}[Warning]${color_off}: Процессы других пользователей не видны пользователю.\n"
+bhyve_proc=$(top -b | grep bhyve)
+  if [ "${bhyve_proc}" == "" ]; then
+#    printf "${color_green}[Ok]${color_off}: VM нету\n"
+    echo "Total VM's Sum: 0 KiB"
   else
+    if [ "$(id -u)" -ne 0 ] && [ "$see_other_uids" -eq 0 ]; then
+#      printf "${color_yellow}[Warning]${color_off}: Процессы других пользователей не видны пользователю.\n"
+    else
 # Извлекаем и суммируем значения памяти виртуальных машин
 total_bytes=$(top -b | grep bhyve | awk '
 {
@@ -721,7 +728,7 @@ fi
 # Выводим результат
 echo "Total VM's Sum: $total_vms $unit"
 
-
+    fi
 ##############
 
 top -b -o size | awk -v mem_total="$mem_total" '
