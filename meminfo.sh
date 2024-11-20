@@ -729,6 +729,7 @@ fi
 echo "Total VM's Sum: $total_vms $unit"
 
     fi
+  fi
 ##############
 
 top -b -o size | awk -v mem_total="$mem_total" '
@@ -765,7 +766,7 @@ END {
 #    Память, выделенную для общего использования (shared memory).
 #    Память, которая может быть сброшена или пересчитана.
 #    Память, которая подлежит свопу.
-  fi
+#  fi
 fi
 
 b_flag=false
